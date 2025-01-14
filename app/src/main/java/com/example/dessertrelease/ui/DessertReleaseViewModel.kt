@@ -15,20 +15,37 @@
  */
 package com.example.dessertrelease.ui
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.dessertrelease.DessertReleaseApplication
 import com.example.dessertrelease.R
+import com.example.dessertrelease.data.UserPreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /*
  * View model of Dessert Release components
  */
-class DessertReleaseViewModel() : ViewModel() {
+class DessertReleaseViewModel(private val userPreferencesRepository: UserPreferencesRepository) :
+    ViewModel() {
 
-    private val _uiState = MutableStateFlow(DessertReleaseUiState())
+    private val _uiState: StateFlow<DessertReleaseUiState> =
+        userPreferencesRepository.isLinearLayout.map { isLinearLayout ->
+            DessertReleaseUiState(isLinearLayout)
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = DessertReleaseUiState()
+        )
 
     // UI states access for various [DessertReleaseUiState]
     val uiState: StateFlow<DessertReleaseUiState> = _uiState
@@ -38,13 +55,16 @@ class DessertReleaseViewModel() : ViewModel() {
      * save the selection in DataStore through [userPreferencesRepository]
      */
     fun selectLayout(isLinearLayout: Boolean) {
-        _uiState.value = DessertReleaseUiState(isLinearLayout)
+        viewModelScope.launch {
+            userPreferencesRepository.saveLayoutPreference(isLinearLayout)
+        }
     }
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                DessertReleaseViewModel()
+                val application = (this[APPLICATION_KEY] as DessertReleaseApplication)
+                DessertReleaseViewModel(application.userPreferencesRepository)
             }
         }
     }
